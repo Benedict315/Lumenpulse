@@ -30,6 +30,32 @@ export interface HealthResponse {
 }
 
 /**
+ * Portfolio API Types
+ */
+export interface AssetBalance {
+  assetCode: string;
+  assetIssuer: string | null;
+  amount: string;
+  valueUsd: number;
+}
+
+export interface PortfolioSummary {
+  totalValueUsd: string;
+  assets: AssetBalance[];
+  lastUpdated: string | null;
+  hasLinkedAccount: boolean;
+}
+
+export interface SnapshotResponse {
+  success: boolean;
+  snapshot: {
+    id: string;
+    createdAt: string;
+    totalValueUsd: string;
+  };
+}
+
+/**
  * Auth API Service
  * Uses the shared API client for all requests
  */
@@ -58,6 +84,26 @@ export const healthApi = {
    */
   async check(): Promise<ApiResponse<HealthResponse>> {
     return apiClient.get<HealthResponse>('/health');
+  },
+};
+
+/**
+ * Portfolio API Service
+ */
+export const portfolioApi = {
+  /**
+   * Get latest portfolio summary (total USD + asset list)
+   */
+  async getSummary(): Promise<ApiResponse<PortfolioSummary>> {
+    return apiClient.get<PortfolioSummary>('/portfolio/summary');
+  },
+
+  /**
+   * Trigger a fresh snapshot for the authenticated user
+   * Used by pull-to-refresh to get live Stellar balances
+   */
+  async createSnapshot(): Promise<ApiResponse<SnapshotResponse>> {
+    return apiClient.post<SnapshotResponse>('/portfolio/snapshot');
   },
 };
 
