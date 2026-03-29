@@ -21,6 +21,8 @@ import {
   GetPortfolioHistoryDto,
   PortfolioHistoryResponseDto,
   PortfolioSummaryResponseDto,
+  PortfolioSnapshotBatchStatusDto,
+  TriggerSnapshotBatchResponseDto,
 } from './dto/portfolio-snapshot.dto';
 import { PortfolioPerformanceResponseDto } from './dto/portfolio-performance.dto';
 
@@ -129,22 +131,56 @@ export class PortfolioController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Snapshot creation triggered',
-    schema: {
-      properties: {
-        message: { type: 'string', example: 'Snapshot creation triggered' },
-        success: { type: 'number', example: 42 },
-        failed: { type: 'number', example: 0 },
-      },
-    },
+    description: 'Snapshot creation queued',
+    type: TriggerSnapshotBatchResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async triggerSnapshotCreation() {
     const result = await this.portfolioService.triggerSnapshotCreation();
     return {
-      message: 'Snapshot creation triggered',
-      success: result.success,
+      message: 'Snapshot creation queued',
+      batchId: result.batchId,
+      status: result.status,
+      total: result.total,
+      completed: result.completed,
       failed: result.failed,
+      progressPercent: result.progressPercent,
+    };
+  }
+
+  @Get('snapshots/status')
+  @ApiOperation({
+    summary: 'Get snapshot batch status',
+    description:
+      'Returns progress information for a queued snapshot batch job.',
+  })
+  @ApiQuery({
+    name: 'batchId',
+    required: true,
+    type: String,
+    example: '9b3b4a07-5b35-4f8c-9f26-8f3ac77e5b41',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Snapshot batch status retrieved',
+    type: PortfolioSnapshotBatchStatusDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getSnapshotBatchStatus(
+    @Query('batchId') batchId: string,
+  ): Promise<PortfolioSnapshotBatchStatusDto> {
+    const status = await this.portfolioService.getSnapshotBatchStatus(batchId);
+    return {
+      batchId: status.batchId,
+      status: status.status,
+      total: status.total,
+      completed: status.completed,
+      failed: status.failed,
+      progressPercent: status.progressPercent,
+      requestedAt: status.requestedAt ?? null,
+      startedAt: status.startedAt ?? null,
+      finishedAt: status.finishedAt ?? null,
+      triggeredBy: status.triggeredBy ?? 'unknown',
     };
   }
 
