@@ -2,7 +2,7 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -26,6 +26,14 @@ import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import databaseConfig from './database/database.config';
 import stellarConfig from './stellar/config/stellar.config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { RateLimitStorageService } from './common/rate-limit/rate-limit.storage';
+import {
+  createThrottlerOptions,
+  getRateLimitSettings,
+} from './common/rate-limit/rate-limit.config';
 import { TestController } from './test/test.controller';
 import { UploadModule } from './upload/upload.module';
 import { AuthModule } from './auth/auth.module';
@@ -51,6 +59,15 @@ import { UsersModule } from './users/users.module';
     }),
 
     ScheduleModule.forRoot(),
+
+    RateLimitModule,
+
+    ThrottlerModule.forRootAsync({
+      imports: [RateLimitModule],
+      inject: [RateLimitStorageService],
+      useFactory: (storageService: RateLimitStorageService) =>
+        createThrottlerOptions(getRateLimitSettings(), storageService),
+    }),
 
     ThrottlerModule.forRoot([
       {
@@ -84,12 +101,12 @@ import { UsersModule } from './users/users.module';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: RateLimitGuard,
     },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
   }
 }
