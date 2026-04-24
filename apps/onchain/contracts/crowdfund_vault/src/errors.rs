@@ -1,5 +1,4 @@
 use soroban_sdk::contracterror;
-
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -25,12 +24,15 @@ pub enum CrowdfundError {
     AlreadyVoted = 19,
     InsufficientContributionToVote = 20,
     MilestoneAlreadyApproved = 21,
-    InvalidRecipient = 22,
-    UnsupportedStorageVersion = 23,
-    MigrationRequired = 24,
-    MilestoneExpired = 25,
-    RefundWindowClosed = 26,
-    RefundWindowNotOpen = 27,
-    OracleNotSet = 28,
-    InvalidPrice = 29,
+    MilestoneAlreadyDisputed = 22,
+    MilestoneNotDisputed = 23,
+    MilestoneEscrowed = 24,
+    InvalidRecipient = 25,
+    UnsupportedStorageVersion = 26,
+    MigrationRequired = 27,
+    MilestoneExpired = 28,
+    RefundWindowClosed = 29,
+    RefundWindowNotOpen = 30,
+    OracleNotSet = 31,
+    InvalidPrice = 32,
 }
