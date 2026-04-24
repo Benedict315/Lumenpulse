@@ -16,6 +16,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { portfolioApi, AssetBalance, PortfolioSummary } from '../../lib/api';
 import { transactionApi } from '../../lib/transaction';
 import { Transaction, TransactionType, TransactionStatus } from '../../lib/types/transaction';
+import { useCachedData } from '../../hooks/useCachedData';
+import { CACHE_CONFIGS } from '../../lib/cache';
+import { CachedApi } from '../../lib/cached-api';
 
 /* ================= Helpers ================= */
 
@@ -112,35 +115,63 @@ function Header({ summary, colors }: { summary: PortfolioSummary; colors: any })
 /* ================= Screen ================= */
 
 export default function PortfolioScreen() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
 
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Use cached data for portfolio summary
+  const {
+    data: summary,
+    loading: summaryLoading,
+    refresh: refreshSummary,
+    isStale: summaryStale,
+  } = useCachedData({
+    key: `portfolio_summary_${user?.id || 'default'}`,
+    fetcher: async () => {
+      const response = await portfolioApi.getSummary();
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error(response.error?.message || 'Failed to fetch portfolio');
+    },
+    enabled: isAuthenticated,
+    ...CACHE_CONFIGS.PORTFOLIO,
+  });
+
+  // Use cached data for transactions
+  const {
+    data: transactionData,
+    loading: transactionsLoading,
+    refresh: refreshTransactions,
+    isStale: transactionsStale,
+  } = useCachedData({
+    key: `transactions_${user?.id || 'default'}_5`,
+    fetcher: async () => {
+      const response = await transactionApi.getHistory(5);
+      if (response.transactions) {
+        return response.transactions;
+      }
+      throw new Error('Failed to fetch transactions');
+    },
+    enabled: isAuthenticated,
+    ...CACHE_CONFIGS.TRANSACTIONS,
+  });
+
+  const transactions = transactionData || [];
+  const loading = summaryLoading && transactionsLoading;
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = useCallback(async (refresh = false) => {
-    refresh ? setRefreshing(true) : setLoading(true);
-
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const res = await portfolioApi.getSummary();
-      if (res.success && res.data) setSummary(res.data);
-
-      const tx = await transactionApi.getHistory(5);
-      if (tx.transactions) setTransactions(tx.transactions);
-    } catch (e) {
-      console.log(e);
+      await Promise.all([refreshSummary(), refreshTransactions()]);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshSummary, refreshTransactions]);
 
-  useEffect(() => {
-    if (isAuthenticated) fetchData();
-  }, [isAuthenticated]);
+  // Show stale data indicator
+  const isStale = summaryStale || transactionsStale;
 
   //if (!isAuthenticated) {
     //return (
@@ -152,6 +183,16 @@ export default function PortfolioScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Stale data indicator */}
+      {isStale && (
+        <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+          <Text style={[styles.staleText, { color: colors.warning }]}>
+            Showing cached data - Pull to refresh
+          </Text>
+        </View>
+      )}
+      
       <FlatList
         data={summary?.assets || []}
         keyExtractor={(item) => item.assetCode}
@@ -180,7 +221,7 @@ export default function PortfolioScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => fetchData(true)}
+            onRefresh={handleRefresh}
           />
         }
 
@@ -237,5 +278,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+  },
+
+  staleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  staleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
   },
 });

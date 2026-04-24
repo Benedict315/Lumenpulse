@@ -9,10 +9,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { stellarApi, StellarAsset } from '../../lib/api';
+import { useCachedData } from '../../hooks/useCachedData';
+import { CACHE_CONFIGS } from '../../lib/cache';
 
 // ─── Mock fallback data (used when API is unavailable) ───────────────────────
 // These are popular Stellar network assets. Replace with live data once
@@ -105,30 +108,40 @@ function AssetItem({ asset, colors }: { asset: StellarAsset; colors: ThemeColors
 
 export default function AssetDiscoveryScreen() {
   const { colors } = useTheme();
-
-  const [assets, setAssets] = useState<StellarAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAssets = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    const response = await stellarApi.getAssets();
-    if (response.success && response.data?.assets?.length) {
-      setAssets(response.data.assets);
-    } else {
+  // Use cached data for assets
+  const {
+    data: assetsData,
+    loading: isLoading,
+    error: apiError,
+    refresh,
+    isStale,
+  } = useCachedData({
+    key: 'stellar_assets',
+    fetcher: async () => {
+      const response = await stellarApi.getAssets();
+      if (response.success && response.data?.assets?.length) {
+        return response.data.assets;
+      }
       // Gracefully fall back to mock data so the UI is always useful
-      setAssets(MOCK_ASSETS);
+      return MOCK_ASSETS;
+    },
+    ...CACHE_CONFIGS.ASSETS,
+  });
+
+  const assets = assetsData || [];
+  const error = apiError?.message || null;
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
     }
-
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void fetchAssets();
-  }, [fetchAssets]);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -163,7 +176,7 @@ export default function AssetDiscoveryScreen() {
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{error}</Text>
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: colors.accent }]}
-            onPress={() => void fetchAssets()}
+            onPress={handleRefresh}
             activeOpacity={0.8}
           >
             <Text style={styles.retryText}>Retry</Text>
@@ -181,9 +194,25 @@ export default function AssetDiscoveryScreen() {
         keyExtractor={(item) => `${item.code}-${item.issuer ?? 'native'}`}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
         ListHeaderComponent={
           <>
             <Text style={[styles.screenTitle, { color: colors.text }]}>Discover</Text>
+
+            {/* Stale data indicator */}
+            {isStale && (
+              <View style={[styles.staleIndicator, { backgroundColor: colors.warning + '22' }]}>
+                <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+                <Text style={[styles.staleText, { color: colors.warning }]}>
+                  Showing cached data - Pull to refresh
+                </Text>
+              </View>
+            )}
 
             {/* Search Bar */}
             <View
@@ -334,4 +363,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   retryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  
+  staleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  staleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
 });
