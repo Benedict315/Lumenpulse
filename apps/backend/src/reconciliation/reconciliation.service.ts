@@ -32,12 +32,19 @@ export class ReconciliationService {
    * Compares stored portfolio_assets against live Horizon balances, logs drift,
    * and repairs inconsistencies by updating the stored records.
    */
-  async runReconciliation(triggeredBy = 'scheduled'): Promise<ReconciliationJob> {
+  async runReconciliation(
+    triggeredBy = 'scheduled',
+  ): Promise<ReconciliationJob> {
     const job = await this.jobRepo.save(
-      this.jobRepo.create({ triggeredBy, status: ReconciliationStatus.RUNNING }),
+      this.jobRepo.create({
+        triggeredBy,
+        status: ReconciliationStatus.RUNNING,
+      }),
     );
 
-    this.logger.log(`Reconciliation job ${job.id} started (triggeredBy=${triggeredBy})`);
+    this.logger.log(
+      `Reconciliation job ${job.id} started (triggeredBy=${triggeredBy})`,
+    );
 
     const driftDetails: DriftRecord[] = [];
     let usersProcessed = 0;
@@ -53,7 +60,10 @@ export class ReconciliationService {
 
       for (const user of usersWithKey) {
         try {
-          const drifts = await this.reconcileUser(user.id, user.stellarPublicKey!);
+          const drifts = await this.reconcileUser(
+            user.id,
+            user.stellarPublicKey,
+          );
           driftsDetected += drifts.length;
           driftsRepaired += drifts.filter((d) => d.repaired).length;
           driftDetails.push(...drifts);
@@ -69,7 +79,9 @@ export class ReconciliationService {
     } catch (err) {
       job.status = ReconciliationStatus.FAILED;
       job.errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Reconciliation job ${job.id} failed: ${job.errorMessage}`);
+      this.logger.error(
+        `Reconciliation job ${job.id} failed: ${job.errorMessage}`,
+      );
     }
 
     job.usersProcessed = usersProcessed;
@@ -91,7 +103,10 @@ export class ReconciliationService {
    * Compare stored portfolio_assets for one user against live Stellar balances.
    * Repairs any drifted records in-place.
    */
-  private async reconcileUser(userId: string, publicKey: string): Promise<DriftRecord[]> {
+  private async reconcileUser(
+    userId: string,
+    publicKey: string,
+  ): Promise<DriftRecord[]> {
     const [upstreamBalances, storedAssets] = await Promise.all([
       this.stellarBalanceService.getAccountBalances(publicKey),
       this.assetRepo.find({ where: { userId } }),

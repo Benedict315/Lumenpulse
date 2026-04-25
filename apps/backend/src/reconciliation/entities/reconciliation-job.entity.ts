@@ -29,7 +29,11 @@ export class ReconciliationJob {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'enum', enum: ReconciliationStatus, default: ReconciliationStatus.RUNNING })
+  @Column({
+    type: 'enum',
+    enum: ReconciliationStatus,
+    default: ReconciliationStatus.RUNNING,
+  })
   status: ReconciliationStatus;
 
   @Column({ type: 'int', default: 0 })

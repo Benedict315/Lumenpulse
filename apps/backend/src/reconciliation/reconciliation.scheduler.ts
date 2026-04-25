@@ -13,7 +13,8 @@ export class ReconciliationScheduler {
   async handleScheduledReconciliation(): Promise<void> {
     this.logger.log('Scheduled reconciliation triggered');
     try {
-      const job = await this.reconciliationService.runReconciliation('scheduled');
+      const job =
+        await this.reconciliationService.runReconciliation('scheduled');
       this.logger.log(
         `Scheduled reconciliation complete — jobId=${job.id} drifts=${job.driftsDetected} repaired=${job.driftsRepaired}`,
       );
